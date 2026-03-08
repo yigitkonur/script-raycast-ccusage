@@ -4,6 +4,11 @@
 🟢 ━━━━━━━━┈┈ 42%  ↻ 2h18m  7d Op 8% · So 12%  $0 extra
 ```
 
+## video
+
+https://github.com/user-attachments/assets/6c0163cf-e251-434d-be78-5705106785ea
+
+
 Shows your Claude.ai usage directly in the Raycast bar. Refreshes every 5 minutes. No API key needed — reads your existing browser session.
 
 **What you see:**
