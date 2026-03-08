@@ -1,9 +1,9 @@
-#!/usr/bin/env -S uv run --script
+#!/usr/bin/env -S uv run --python 3.12 --script
 # -*- coding: utf-8 -*-
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "rookiepy>=0.5.6",
+#   "rookiepy==0.5.5",
 #   "curl-cffi>=0.14.0",
 # ]
 # ///
