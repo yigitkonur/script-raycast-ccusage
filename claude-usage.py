@@ -46,39 +46,59 @@ def get_cookie():
     return None, None
 
 
-def fmt_reset(iso_str):
+def parse_reset(iso_str):
     if not iso_str:
         return None
     try:
-        resets = datetime.datetime.fromisoformat(iso_str)
-        now = datetime.datetime.now(timezone.utc)
-        total_secs = max(int((resets - now).total_seconds()), 0)
-        hours, remainder = divmod(total_secs, 3600)
-        minutes, _ = divmod(remainder, 60)
-        return f"{hours}h{minutes:02d}m" if hours else f"{minutes}m"
+        return datetime.datetime.fromisoformat(iso_str)
     except Exception:
         return None
 
 
+def fmt_reset(iso_str):
+    reset_at = parse_reset(iso_str)
+    if not reset_at:
+        return None
+    now = datetime.datetime.now(timezone.utc)
+    total_secs = max(int((reset_at - now).total_seconds()), 0)
+    hours, remainder = divmod(total_secs, 3600)
+    minutes, _ = divmod(remainder, 60)
+    return f"{hours}h{minutes:02d}m" if hours else f"{minutes}m"
+
+
+def fmt_restore_at(iso_str):
+    reset_at = parse_reset(iso_str)
+    if not reset_at:
+        return None
+    local_reset = reset_at.astimezone()
+    local_now = datetime.datetime.now().astimezone()
+    if local_reset.date() == local_now.date():
+        return local_reset.strftime("%H:%M")
+    tomorrow = local_now.date() + datetime.timedelta(days=1)
+    if local_reset.date() == tomorrow:
+        return f"tom {local_reset:%H:%M}"
+    return local_reset.strftime("%a %H:%M")
+
+
 def status_dot(pct):
     if pct >= 90:
-        return "\U0001F534"   # red
+        return "🔴"
     if pct >= 70:
-        return "\U0001F7E0"   # orange
+        return "🟠"
     if pct >= 50:
-        return "\U0001F7E1"   # yellow
-    return "\U0001F7E2"       # green
+        return "🟡"
+    return "🟢"
 
 
 def bar(pct, width=10):
     filled = round(pct / 100 * width)
-    return "\u2501" * filled + "\u2508" * (width - filled)
+    return "━" * filled + "┈" * (width - filled)
 
 
 def main():
     name, val = get_cookie()
     if not val:
-        print("\U0001F6AB Log in to claude.ai first")
+        print("🚫 Log in to claude.ai first")
         sys.exit(1)
 
     s = requests.Session(impersonate="chrome120")
@@ -94,48 +114,25 @@ def main():
 
     parts = []
 
-    # 5-hour window
     fh = data.get("five_hour")
     if fh and fh.get("utilization") is not None:
         pct = fh["utilization"]
         reset = fmt_reset(fh.get("resets_at"))
-        reset_str = f"  \u21BB {reset}" if reset else ""
-        parts.append(f"{status_dot(pct)} {bar(pct)} {pct:.0f}%{reset_str}")
+        restore_at = fmt_restore_at(fh.get("resets_at"))
+        parts.append(f"{status_dot(pct)} {bar(pct)} {pct:.0f}%")
+        if reset:
+            parts.append(f"↻ {reset}")
+        if restore_at:
+            parts.append(f"at {restore_at}")
 
-    # Per-model 7-day windows
-    model_keys = [
-        ("seven_day_opus", "Op"),
-        ("seven_day_sonnet", "So"),
-        ("seven_day_cowork", "Cw"),
-    ]
-    active_models = []
-    for key, label in model_keys:
-        window = data.get(key)
-        if window and window.get("utilization") is not None:
-            pct = window["utilization"]
-            active_models.append(f"{label}\u2009{pct:.0f}%")
-    if active_models:
-        parts.append("7d " + " \u2022 ".join(active_models))
-
-    # Legacy seven_day fallback
-    sd = data.get("seven_day")
-    if sd and sd.get("utilization") is not None and not active_models:
-        pct = sd["utilization"]
-        reset = fmt_reset(sd.get("resets_at"))
-        reset_str = f" \u21BB {reset}" if reset else ""
-        parts.append(f"7d {pct:.0f}%{reset_str}")
-
-    # Credits
     extra = data.get("extra_usage") or {}
     if extra.get("is_enabled"):
         used = extra.get("used_credits", 0)
         limit = extra.get("monthly_limit")
-        if limit:
-            parts.append(f"${used:.2f}\u2009/\u2009${limit:.2f}")
+        if limit and used > 0:
+            parts.append(f"${used:.2f}/${limit:.2f}")
         elif used > 0:
-            parts.append(f"${used:.2f} spent")
-        else:
-            parts.append("$0 extra")
+            parts.append(f"${used:.2f} extra")
 
     print("  ".join(parts) if parts else "No usage data")
 
